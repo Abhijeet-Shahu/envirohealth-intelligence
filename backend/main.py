@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+from urllib3 import request
 
 from services.route_scoring import calculate_route_score
+from services.routing import get_routes
 
 app = FastAPI()
 
@@ -9,6 +11,10 @@ app = FastAPI()
 class RouteRequest(BaseModel):
     source: str
     destination: str
+    start_lon: float
+    start_lat: float
+    end_lon: float
+    end_lat: float
 
 
 @app.get("/")
@@ -46,11 +52,20 @@ def generate_explanation(route):
 @app.post("/analyze-route")
 def analyze_route(request: RouteRequest):
 
-    routes = [
+    # Get real routes from OSRM
+    osrm_routes = get_routes(
+        request.start_lon,
+        request.start_lat,
+        request.end_lon,
+        request.end_lat
+    )
+
+    routes = []
+
+    # Temporary environmental data for prototype
+    # Later this will come from real environmental/geospatial APIs
+    mock_environment = [
         {
-            "route_id": "Route A",
-            "distance_km": 7.8,
-            "travel_time_min": 20,
             "heat_risk": 0.8,
             "pollution_risk": 0.7,
             "traffic": 0.9,
@@ -60,9 +75,6 @@ def analyze_route(request: RouteRequest):
             "efficiency": 0.5
         },
         {
-            "route_id": "Route B",
-            "distance_km": 8.2,
-            "travel_time_min": 24,
             "heat_risk": 0.3,
             "pollution_risk": 0.4,
             "traffic": 0.4,
@@ -72,9 +84,6 @@ def analyze_route(request: RouteRequest):
             "efficiency": 0.8
         },
         {
-            "route_id": "Route C",
-            "distance_km": 9.1,
-            "travel_time_min": 22,
             "heat_risk": 0.5,
             "pollution_risk": 0.5,
             "traffic": 0.6,
@@ -85,18 +94,36 @@ def analyze_route(request: RouteRequest):
         }
     ]
 
+    # Convert OSRM routes into our route format
+    for i, osrm_route in enumerate(osrm_routes):
+
+        environment = mock_environment[i % len(mock_environment)]
+
+        route = {
+            "route_id": f"Route {chr(65 + i)}",
+            "distance_km": osrm_route["distance_km"],
+            "travel_time_min": osrm_route["travel_time_min"],
+            **environment
+        }
+
+        routes.append(route)
+
     # Calculate score for every route
     for route in routes:
+
         route["envirohealth_score"] = calculate_route_score(route)
+
         route["explanation"] = generate_explanation(route)
+
         route["factor_summary"] = {
-    "heat": "Low Risk" if route["heat_risk"] < 0.5 else "High Risk",
-    "pollution": "Low Risk" if route["pollution_risk"] < 0.5 else "High Risk",
-    "traffic": "Low" if route["traffic"] < 0.5 else "High",
-    "greenery": "Good" if route["green_cover"] > 0.5 else "Low",
-    "water": "Good" if route["water_access"] > 0.5 else "Limited",
-    "healthcare": "Good" if route["healthcare_access"] > 0.5 else "Limited"
-}
+            "heat": "Low Risk" if route["heat_risk"] < 0.5 else "High Risk",
+            "pollution": "Low Risk" if route["pollution_risk"] < 0.5 else "High Risk",
+            "traffic": "Low" if route["traffic"] < 0.5 else "High",
+            "greenery": "Good" if route["green_cover"] > 0.5 else "Low",
+            "water": "Good" if route["water_access"] > 0.5 else "Limited",
+            "healthcare": "Good" if route["healthcare_access"] > 0.5 else "Limited"
+        }
+
     # Find the route with the highest score
     best_route = max(
         routes,
