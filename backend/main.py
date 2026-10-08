@@ -17,6 +17,31 @@ def home():
         "message": "EnviroHealth Intelligence Backend is running!"
     }
 
+def generate_explanation(route):
+    explanation = []
+
+    if route["heat_risk"] < 0.5:
+        explanation.append("lower heat exposure")
+
+    if route["pollution_risk"] < 0.5:
+        explanation.append("lower pollution risk")
+
+    if route["traffic"] < 0.5:
+        explanation.append("lower traffic")
+
+    if route["green_cover"] > 0.5:
+        explanation.append("better greenery")
+
+    if route["water_access"] > 0.5:
+        explanation.append("better water access")
+
+    if route["healthcare_access"] > 0.5:
+        explanation.append("better healthcare access")
+
+    if not explanation:
+        return "This route provides the best overall balance among the evaluated factors."
+
+    return "Recommended because it has " + ", ".join(explanation) + "."
 
 @app.post("/analyze-route")
 def analyze_route(request: RouteRequest):
@@ -63,7 +88,15 @@ def analyze_route(request: RouteRequest):
     # Calculate score for every route
     for route in routes:
         route["envirohealth_score"] = calculate_route_score(route)
-
+        route["explanation"] = generate_explanation(route)
+        route["factor_summary"] = {
+    "heat": "Low Risk" if route["heat_risk"] < 0.5 else "High Risk",
+    "pollution": "Low Risk" if route["pollution_risk"] < 0.5 else "High Risk",
+    "traffic": "Low" if route["traffic"] < 0.5 else "High",
+    "greenery": "Good" if route["green_cover"] > 0.5 else "Low",
+    "water": "Good" if route["water_access"] > 0.5 else "Limited",
+    "healthcare": "Good" if route["healthcare_access"] > 0.5 else "Limited"
+}
     # Find the route with the highest score
     best_route = max(
         routes,
